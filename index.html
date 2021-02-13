@@ -111,6 +111,7 @@
 	display:flex;
 	justify-content: center;
 	align-items:center;
+	color:blue;
 	}
 	#oppositedeck{
 	position:absolute;
@@ -120,6 +121,7 @@
 	display:flex;
 	justify-content: center;
 	align-items:center;
+	color:blue;
 	}
 	
 	#discard{
@@ -171,13 +173,21 @@
 		height:160px;
 		left:0;
 		top:0;
+		text-align:center;
+		font-size:50px;
+		line-height: 160px;
+		background:rgba(192,192,192,0.5);
 	}
 	#battlemessage_middle{
 		position:absolute;
 		width:640px;
 		height:160px;
 		left:0;
-		top:160;
+		top:160px;
+		text-align:center;
+		font-size:50px;
+		line-height: 160px;
+		background:rgba(192,192,192,0.5);
 	}
 	#battlemessage_bottom{
 		position:absolute;
@@ -185,6 +195,10 @@
 		height:160px;
 		left:0;
 		top:320px;
+		text-align:center;
+		font-size:50px;
+		line-height: 160px;
+		background:rgba(192,192,192,0.5);
 	}
 	
 
@@ -242,40 +256,39 @@ class GameServer
 		this.p2result = this.ResultData(false);
 	}
 
-	ResultData(p1side)
+	ResultData(p1side,gameend = 0)
 	{
 		let result = {
-			damage : 0,
+			status: this.status,
+			jugde: gameend, //status==GameEnd時  +:勝ち -:負け 0:引き分け
 			player : {},
 			opposite : {}
 		}
 		let player1 = {
-			win : this.damage > 0,
 			hand : this.player1.hand.slice(0,this.player1.hand.length - this.player1.draw.length),
 			decknum : this.player1.deck.length,
 			combo : this.player1.combo,
 			discard : this.player1.discard,
 			battle : this.player1.battle,
-			draw : this.player1.draw
+			draw : this.player1.draw,
+			damage : (this.damage < 0 ? -this.damage : 0)
 		};
 		let player2 = {
-			win : this.damage < 0,
 			hand : this.player2.hand.slice(0,this.player2.hand.length - this.player2.draw.length),
 			decknum : this.player2.deck.length,
 			combo : this.player2.combo,
 			discard : this.player2.discard,
 			battle : this.player2.battle,
-			draw : this.player2.draw
+			draw : this.player2.draw,
+			damage : (this.damage > 0 ? this.damage : 0)
 		}
 
 		if (p1side)
 		{
-			result.damage = -this.damage;
 			result.player = player1;
 			result.opposite = player2;
 		}
 		else{
-			result.damage = this.damage;
 			result.player = player2;
 			result.opposite = player1;
 		}
@@ -353,6 +366,18 @@ class GameServer
 		}else if (this.damage < 0){
 			Draw(this.player1,-this.damage);
 		}
+
+		const p1dhand = this.player1.hand.length + (this.damage < 0 ? this.damage :0);
+		const p2dhand = this.player2.hand.length - (this.damage > 0 ? this.damage :0);
+		if (p1dhand <= 0 || p2dhand <= 0)
+		{
+			this.status = GSSTATUS.GameEnd;
+			const end_damage = p1dhand - p2dhand;
+			this.p1result = this.ResultData(true,end_damage);
+			this.p2result = this.ResultData(false,-end_damage);
+			return;
+		}	
+
 		this.p1result = this.ResultData(true);
 		this.p2result = this.ResultData(false);
 
@@ -382,10 +407,6 @@ class GameServer
 
 		}
 		this.player1.battle = this.player2.battle = null
-		if (this.player1.hand.length == 0 || this.player2.hand.length == 0)
-		{
-			this.status = GSSTATUS.GameEnd;
-		}
 	}	
 
 	Battle(card_a,card_b,combo_a = null)	{
@@ -426,10 +447,6 @@ class GameServer
 		{
 			this.status = GSSTATUS.BattleChoice;
 		}
-		if (this.player1.hand.length == 0 || this.player2.hand.length == 0)
-		{
-			this.status = GSSTATUS.GameEnd;
-		}
 	}
 
 }
@@ -446,24 +463,54 @@ const GMSTATUS = { Choice:1 , BattleEffect:3, GameEnd:6 };
 		const r = JSON.parse(this.GameServer.p1result);
 		this.player = r.player;
 		this.opposite = r.opposite;
-		this.damage = r.damage;
 
 		this.status = GMSTATUS.Choice;
+
+		this.message_top = "";
+		this.message_middle = "";
+		this.message_bottom = "";
 	}
 	  
 	Choice(index){
-		this.status = this.damage > 0 ? GMSTATUS.Choice: GMSTATUS.BattleEffect;
+		this.status = this.player.damage > 0 ? GMSTATUS.Choice : GMSTATUS.BattleEffect;
 
 		this.GameServer.Choice(index);
 		const r = JSON.parse(this.GameServer.p1result);
 		this.player = r.player;
 		this.opposite = r.opposite;
-		this.damage = r.damage;
+
+		this.message_top = this.message_middle = this.message_bottom = "";
+		if (this.opposite.damage > 0)
+		{
+			this.message_top = "Damage " + this.opposite.damage;
+		}
+		else if (this.player.damage > 0)
+		{
+			this.message_bottom = "Damage " + this.player.damage;
+		}
+		else
+		{
+			this.message_middle = "Draw";
+		}
+		if (r.status == GSSTATUS.GameEnd)
+		{
+			this.status = GMSTATUS.GameEnd;
+			if (r.jugde > 0){
+				this.message_middle = "Game Win";
+			}
+			else if (r.jugde < 0){
+				this.message_middle = "Game Lose";
+			}
+			else{
+				this.message_middle = "Game Draw";
+			}
+
+		}
 	}
 
 	BattleEffect()
 	{
-		if (this.damage < 0)
+		if (this.opposite.damage > 0)
 		{
 			this.GameServer.Choice(0);
 			const r = JSON.parse(this.GameServer.p1result);
@@ -487,7 +534,7 @@ const GMSTATUS = { Choice:1 , BattleEffect:3, GameEnd:6 };
 				this.opposite.combo = null;
 			}
 			this.player.discard.push(this.player.battle);
-			if (this.damage > 0) {
+			if (this.player.damage > 0) {
 				this.opposite.combo = this.opposite.battle;
 			}
 			else{
@@ -541,6 +588,9 @@ const GMSTATUS = { Choice:1 , BattleEffect:3, GameEnd:6 };
 	}
 	let elem = document.getElementById('battleeffect');
 	elem.onclick = function(){
+		if (Game.status == GMSTATUS.GameEnd) {
+			return;
+		}
 		elem.style.display = "none";
 		Game.BattleEffect();
 		refresh();
@@ -563,6 +613,24 @@ function refresh()
 			{
 				let elem = document.getElementById('battleeffect');
 				elem.style.display = "block";
+				elem = document.getElementById('battlemessage_top');
+				elem.textContent = Game.message_top;
+				elem = document.getElementById('battlemessage_middle');
+				elem.textContent = Game.message_middle;
+				elem = document.getElementById('battlemessage_bottom');
+				elem.textContent = Game.message_bottom;
+
+			}
+			if (Game.status == GMSTATUS.GameEnd)
+			{
+				let elem = document.getElementById('battleeffect');
+				elem.style.display = "block";
+				elem = document.getElementById('battlemessage_top');
+				elem.textContent = Game.message_top;
+				elem = document.getElementById('battlemessage_middle');
+				elem.textContent = Game.message_middle;
+				elem = document.getElementById('battlemessage_bottom');
+				elem.textContent = Game.message_bottom;
 			}
 			refresh();
 		}
@@ -674,6 +742,9 @@ function create_card_element(card)
 <div id="discardlist">
 </div>
 <div id="battleeffect">
+	<div id="battlemessage_top"></div>
+	<div id="battlemessage_middle"></div>
+	<div id="battlemessage_bottom"></div>
 </div>
 
 </div>
