@@ -1,0 +1,685 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Open Combat</title>
+  <style>
+  
+	.field{
+	position:relative;
+	width:640px;
+	height:480px;
+	
+	background: green;
+	
+	text-align:center;
+	}
+  
+	.card{
+	display: inline-block;
+	width: 58px;
+	height: 89px;
+	
+	border-radius: 10%;
+	border: solid 1px black;
+
+	background: white;
+	text-align:center;
+	line-height: 89px;
+	
+	font-size:50px;
+	
+	margin:0 5px;
+	}
+	.rotate90{
+	transform:rotate(90deg);
+	}
+	
+	#hand{
+	position:absolute;
+	top:330px;
+	height:100px;
+	width:640px;
+	display:flex;
+	justify-content: center;
+	align-items:center;
+	}
+	
+	#oppositehand{
+	position:absolute;
+	top:50px;
+	height:100px;
+	width:640px;
+	display:flex;
+	justify-content: center;
+	align-items:center;
+	flex-direction:row-reverse;
+	}
+	
+	.select{
+	cursor :pointer;
+	}
+	.transparent{
+	opacity:0.1;
+	}
+	
+	#battle{
+	position:absolute;
+	top:230px;
+	left:320px;
+	height:100px;
+	display:flex;
+	justify-content: center;
+	align-items:center;
+	}
+
+	#oppositebattle{
+	position:absolute;
+	top:160px;
+	left:260px;
+	height:100px;
+	display:flex;
+	justify-content: center;
+	align-items:center;
+	}
+	#combo{
+	position:absolute;
+	top:245px;
+	left:400px;
+	height:100px;
+	display:flex;
+	justify-content: center;
+	align-items:center;
+	}
+	#oppositecombo{
+	position:absolute;
+	top:145px;
+	left:180px;
+	height:100px;
+	display:flex;
+	justify-content: center;
+	align-items:center;
+	}
+	
+	
+	
+	#deck{
+	position:absolute;
+	top:360px;
+	left:50px;
+	height:100px;
+	display:flex;
+	justify-content: center;
+	align-items:center;
+	}
+	#oppositedeck{
+	position:absolute;
+	top:20px;
+	left:530px;
+	height:100px;
+	display:flex;
+	justify-content: center;
+	align-items:center;
+	}
+	
+	#discard{
+	position:absolute;
+	top:360px;
+	left:530px;
+	height:100px;
+	display:flex;
+	justify-content: center;
+	align-items:center;
+	}
+	#oppositediscard{
+	position:absolute;
+	top:20px;
+	left:50px;
+	height:100px;
+	display:flex;
+	justify-content: center;
+	align-items:center;
+	}
+	
+	#discardlist{
+	position:absolute;
+	top:140px;
+	height:200px;
+	left:50px;
+	width:540px;
+
+	background:rgba(128,128,128,0.8);
+
+/*	display:flex;*/
+	display:none;
+	flex-wrap:wrap;
+	}
+	
+	#battleeffect{
+	position:absolute;
+	width:640px;
+	height:480px;
+	display:none;
+	z-index:256;
+	
+	background:rgba(0,0,0,0);
+
+	}
+	#battlemessage_top{
+		position:absolute;
+		width:640px;
+		height:160px;
+		left:0;
+		top:0;
+	}
+	#battlemessage_middle{
+		position:absolute;
+		width:640px;
+		height:160px;
+		left:0;
+		top:160;
+	}
+	#battlemessage_bottom{
+		position:absolute;
+		width:640px;
+		height:160px;
+		left:0;
+		top:320px;
+	}
+	
+
+  </style>
+  <script>
+  
+
+const shuffle = ([...array]) => {
+	for (let i = array.length - 1; i >= 0; i--) {
+		const j = Math.floor(Math.random() * (i + 1));
+		[array[i], array[j]] = [array[j], array[i]];
+	}
+	return array;
+}
+class PlayerData{
+	constructor(max_number = 7,hand_number = 4){
+			let deck = [];
+			deck.length = max_number * 2;
+			for (let i = 0;i < max_number;i++)
+			{
+				deck[i] = {number : i+1,red : false};
+				deck[i + max_number] = {number : i+1,red : true};
+			}
+			this.deck = shuffle(deck);
+			
+			this.hand = [];
+			for (let i = 0;i < hand_number;i++)
+			{
+				this.hand.push(this.deck.pop());
+			}
+			
+			this.discard = [];
+			this.combo = null;
+
+			this.battle = null;
+			this.draw = [];
+	}
+}
+
+const GSSTATUS = { BattleChoice:1 , DamageChoice:4 , GameEnd:6 };
+
+
+class GameServer
+{
+	constructor()
+	{
+		this.player1 = new PlayerData();
+		this.player2 = new PlayerData();
+
+		this.damage = 0;	// +:1の勝ち -:2の勝ち
+
+		this.status = GSSTATUS.BattleChoice;
+
+		this.p1result = this.ResultData(true);
+		this.p2result = this.ResultData(false);
+	}
+
+	ResultData(p1side)
+	{
+		let result = {
+			damage : 0,
+			player : {},
+			opposite : {}
+		}
+		let player1 = {
+			win : this.damage > 0,
+			hand : this.player1.hand.slice(0,this.player1.hand.length - this.player1.draw.length),
+			decknum : this.player1.deck.length,
+			combo : this.player1.combo,
+			discard : this.player1.discard,
+			battle : this.player1.battle,
+			draw : this.player1.draw
+		};
+		let player2 = {
+			win : this.damage < 0,
+			hand : this.player2.hand.slice(0,this.player2.hand.length - this.player2.draw.length),
+			decknum : this.player2.deck.length,
+			combo : this.player2.combo,
+			discard : this.player2.discard,
+			battle : this.player2.battle,
+			draw : this.player2.draw
+		}
+
+		if (p1side)
+		{
+			result.damage = -this.damage;
+			result.player = player1;
+			result.opposite = player2;
+		}
+		else{
+			result.damage = this.damage;
+			result.player = player2;
+			result.opposite = player1;
+		}
+		return JSON.stringify(result);
+	}
+
+
+	Choice(index){
+		switch (this.status)
+		{
+		case GSSTATUS.BattleChoice:
+			{
+				let oppsite_index = Math.floor( Math.random() * (this.player2.hand.length));
+				this.BattleChoice(index,oppsite_index );
+			}
+		break;
+		case GSSTATUS.DamageChoice:
+			if (this.damage > 0)
+			{
+				while(this.damage > 0) {
+					let min = 256,oindex = 0;
+					for (let i = 0;i < this.player2.hand.length;i++) {
+						if (this.player2.hand[i].number != 1 && this.player2.hand[i].number < min) {
+							min = this.player2.hand[i].number;
+							oindex = i;
+						}
+					}
+					this.DamageChoice(oindex);
+				}
+			}
+			else{
+				this.DamageChoice(index);
+			}
+		break;
+		case GSSTATUS.GameEnd:
+		break;
+		default:
+		}
+	}
+	BattleChoice(index1,index2)
+	{
+		this.player1.battle = this.player1.hand[index1];
+		this.player2.battle = this.player2.hand[index2];
+
+		this.player1.hand.splice(index1,1);
+		this.player2.hand.splice(index2,1);
+
+		if (this.player1.combo){
+			this.damage = this.Battle(this.player1.battle,this.player2.battle,this.player1.combo);
+		}
+		else if (this.player2.combo){
+			this.damage = -this.Battle(this.player2.battle,this.player1.battle,this.player2.combo);
+		}
+		else{
+			this.damage = this.Battle(this.player1.battle,this.player2.battle);
+		}
+
+		function Draw(player,num)
+		{
+			for (let i = 0; i < num && player.deck.length > 0; i++)
+			{
+				const card = player.deck.pop();
+				player.draw.push(card);
+				player.hand.push(card);
+			}
+		}
+		
+		this.player1.draw.length = 0;
+		this.player2.draw.length = 0;
+		Draw(this.player1,1);
+		Draw(this.player2,1);
+		if (this.damage > 0)
+		{
+			Draw(this.player2,this.damage);
+		}else if (this.damage < 0){
+			Draw(this.player1,-this.damage);
+		}
+		this.p1result = this.ResultData(true);
+		this.p2result = this.ResultData(false);
+
+		this.player1.draw.length = this.player2.draw.length = 0;
+		if (this.player1.combo) {
+			this.player1.discard.push(this.player1.combo);
+			this.player1.combo = null;
+		}
+		if (this.player2.combo) {
+			this.player2.discard.push(this.player2.combo);
+			this.player2.combo = null;
+		}
+		this.status = GSSTATUS.DamageChoice;
+		if (this.damage > 0) {
+			this.player1.combo = this.player1.battle;
+			this.player2.discard.push(this.player2.battle);
+		}
+		else if (this.damage < 0) {
+			this.player1.discard.push(this.player1.battle);
+			this.player2.combo = this.player2.battle;
+		}
+		else {
+			this.player1.discard.push(this.player1.battle);
+			this.player2.discard.push(this.player2.battle);
+	
+			this.status = GSSTATUS.BattleChoice;
+
+		}
+		this.player1.battle = this.player2.battle = null
+		if (this.player1.hand.length == 0 || this.player2.hand.length == 0)
+		{
+			this.status = GSSTATUS.GameEnd;
+		}
+	}	
+
+	Battle(card_a,card_b,combo_a = null)	{
+		let damage = 1;
+		let teck = 0;
+		if (combo_a){
+			if (card_a.red == combo_a.red){damage = 2;}
+			else {teck = 1;}
+		}
+
+		let power_a = card_a.number == 1 ? 256 : card_a.number;
+		let power_b = card_b.number == 1 ? 256 : card_b.number;
+		
+		if (power_a == 256 && power_b == 2){return -1;}
+		if (power_a == 2 && power_b == 256){return damage;}
+		
+		if (power_a + teck > power_b)	{return damage;}
+		if (power_a + teck < power_b)	{return -1;}
+		return 0;
+	}
+
+	DamageChoice(index)
+	{
+		if (this.damage > 0)
+		{
+			this.player2.discard.push(this.player2.hand[index]);
+			this.player2.hand.splice(index,1);
+			this.damage--;
+		}else if (this.damage < 0)
+		{
+			this.player1.discard.push(this.player1.hand[index]);
+			this.player1.hand.splice(index,1);
+			this.damage++;
+		}
+		this.p1result = this.ResultData(true);
+		this.p2result = this.ResultData(false);
+		if (this.damage == 0)
+		{
+			this.status = GSSTATUS.BattleChoice;
+		}
+		if (this.player1.hand.length == 0 || this.player2.hand.length == 0)
+		{
+			this.status = GSSTATUS.GameEnd;
+		}
+	}
+
+}
+
+  
+const GMSTATUS = { Choice:1 , BattleEffect:3, GameEnd:6 };
+
+  class GameMaster
+  {
+	constructor()
+	{
+		this.GameServer = new GameServer();
+
+		const r = JSON.parse(this.GameServer.p1result);
+		this.player = r.player;
+		this.opposite = r.opposite;
+		this.damage = r.damage;
+
+		this.status = GMSTATUS.Choice;
+	}
+	  
+	Choice(index){
+		this.status = this.damage > 0 ? GMSTATUS.Choice: GMSTATUS.BattleEffect;
+
+		this.GameServer.Choice(index);
+		const r = JSON.parse(this.GameServer.p1result);
+		this.player = r.player;
+		this.opposite = r.opposite;
+		this.damage = r.damage;
+	}
+
+	BattleEffect()
+	{
+		if (this.damage < 0)
+		{
+			this.GameServer.Choice(0);
+			const r = JSON.parse(this.GameServer.p1result);
+			this.player = r.player;
+			this.opposite = r.opposite;
+		}
+		else
+		{
+			this.player.hand.push(...this.player.draw);
+			this.player.draw.length = 0;
+			this.opposite.hand.push(...this.opposite.draw);
+			this.opposite.draw.length = 0;
+
+
+			if (this.player.combo) {
+				this.player.discard.push(this.player.combo);
+				this.player.combo = null;
+			}
+			if (this.opposite.combo) {
+				this.opposite.discard.push(this.opposite.combo);
+				this.opposite.combo = null;
+			}
+			this.player.discard.push(this.player.battle);
+			if (this.damage > 0) {
+				this.opposite.combo = this.opposite.battle;
+			}
+			else{
+				this.opposite.discard.push(this.opposite.battle);
+			}
+			this.player.battle = this.opposite.battle = null;
+		}
+
+		this.status = GMSTATUS.Choice;
+	}
+  }
+  
+
+
+  var Game = new GameMaster();
+  window.onload = function() {
+  
+	refresh()
+
+	
+	let discard_element = document.getElementById('discard');
+	discard_element.onclick = function(){
+		let dl_elem = document.getElementById('discardlist');
+
+		while(dl_elem.lastChild){
+			dl_elem.lastChild.remove();
+		}
+		Game.player.discard.forEach((elem, index) => {
+			let card = 	create_card_element(elem);
+			dl_elem.appendChild(card);
+		});
+		dl_elem.style.display = "flex";
+	}
+	discard_element = document.getElementById('oppositediscard');
+	discard_element.onclick = function(){
+		let dl_elem = document.getElementById('discardlist');
+
+		while(dl_elem.lastChild){
+			dl_elem.lastChild.remove();
+		}
+		Game.opposite.discard.forEach((elem, index) => {
+			let card = 	create_card_element(elem);
+			dl_elem.appendChild(card);
+		});
+		dl_elem.style.display = "flex";
+	}
+	
+	discard_element = document.getElementById('discardlist');
+	discard_element.onclick = function(){
+		discard_element.style.display = "none";
+	}
+	let elem = document.getElementById('battleeffect');
+	elem.onclick = function(){
+		elem.style.display = "none";
+		Game.BattleEffect();
+		refresh();
+	}
+
+};
+
+function refresh()
+{
+	let hand_element = document.getElementById('hand');
+	while(hand_element.lastChild){
+		hand_element.lastChild.remove();
+	}
+	Game.player.hand.forEach((elem, index) => {
+		let card = 	create_card_element(elem);
+		card.classList.add("select");
+		card.onclick = function() {
+			Game.Choice(index);
+			if (Game.status == GMSTATUS.BattleEffect)
+			{
+				let elem = document.getElementById('battleeffect');
+				elem.style.display = "block";
+			}
+			refresh();
+		}
+		hand_element.appendChild(card);
+	});
+
+	hand_element = document.getElementById('oppositehand');
+	while(hand_element.lastChild){
+		hand_element.lastChild.remove();
+	}
+	Game.opposite.hand.forEach((elem, index) => {
+		let card = 	create_card_element(elem);
+		hand_element.appendChild(card);
+	});	
+	
+
+	const pdecklength = Game.player.decknum + Game.player.draw.length;
+	const odecklength = Game.opposite.decknum + Game.opposite.draw.length;
+	
+	document.getElementById('deck').innerHTML = '<span class="card">' + pdecklength + '</span>';
+	document.getElementById('oppositedeck').innerHTML = '<span class="card">' + odecklength + '</span>';
+
+
+	if (Game.player.battle)	{
+		document.getElementById('battle').innerHTML = card_html(Game.player.battle,"");
+		document.getElementById('oppositebattle').innerHTML = card_html(Game.opposite.battle,"");
+	}
+	else	{
+		document.getElementById('battle').innerHTML = '<span class="card transparent" ></span>';
+		document.getElementById('oppositebattle').innerHTML = '<span class="card transparent" ></span>';
+	}
+
+	if (Game.player.combo)	{
+		document.getElementById('combo').innerHTML = card_html(Game.player.combo,"rotate90");
+	}
+	else	{
+		document.getElementById('combo').innerHTML = '<span class="card transparent rotate90" ></span>';
+	}
+	if (Game.opposite.combo)	{
+		document.getElementById('oppositecombo').innerHTML = card_html(Game.opposite.combo,"rotate90");
+	}
+	else	{
+		document.getElementById('oppositecombo').innerHTML = '<span class="card transparent rotate90" ></span>';
+	}	
+}
+
+function card_html(card,class_string)
+{
+return '<span class="card ' + class_string + '" ><font color="' + (card.red ? 'red' : 'black') + '">' + card.number + '</font></span>';
+}
+function create_card_element(card)
+{
+	let elem = document.createElement("span");
+	elem.classList.add("card");
+	if (card.red){
+		elem.setAttribute("style","color:red");}
+	else{
+		elem.setAttribute("style","color:black");}
+	elem.textContent = card.number;
+	return elem;
+}
+	
+  </script>
+</head>
+<body>
+<div class="field">
+
+<div id="oppositehand">
+<span class="card">2</span>
+<span class="card">3</span>
+<span class="card">4</span>
+<span class="card">5</span>
+</div>
+
+<div id="oppositedeck">
+<span class="card">10</span>
+</div>
+<div id="oppositediscard">
+<span class="card select">捨</span>
+</div>
+
+<div id="oppositebattle">
+<span class="card" >1</span>
+</div>
+<div id="oppositecombo">
+<span class="card rotate90" ></span>
+</div>
+<div id="combo">
+<span class="card rotate90" ></span>
+</div>
+<div id="battle">
+<span class="card" >1</span>
+</div>
+
+<div id="hand">
+<span class="card select">2</span>
+<span class="card select">3</span>
+<span class="card select">4</span>
+<span class="card select">5</span>
+</div>
+
+<div id="deck">
+<span class="card">10</span>
+</div>
+<div id="discard">
+<span class="card select">捨</span>
+</div>
+
+<div id="discardlist">
+</div>
+<div id="battleeffect">
+</div>
+
+</div>
+
+</body>
+</html>
+
+
+
