@@ -67,6 +67,7 @@ class GameMaster
 		{
 		case STATUS.BattlePhase:
 			this._BattleChoice(this.p1decision,this.p2decision);
+
 			break;
 		case STATUS.DamagePhase:
 			if (this.damage > 0)
@@ -90,9 +91,17 @@ class GameMaster
 		case STATUS.GameEnd:
 			break;
 		}
-
-		this.p1decision = -1;
-        this.p2decision = -1;
+		
+		if (this.damage > 0){
+			 this.p2decision = -1;
+		}
+		else if (this.damage < 0) {
+			 this.p1decision = -1;
+		}
+		else {
+			this.p1decision = -1;
+			this.p2decision = -1;
+		}
 	}
 
 	_ResultData(p1side,gameend = 0)
@@ -143,13 +152,13 @@ class GameMaster
 		this.player2.hand.splice(index2,1);
 
 		if (this.player1.combo){
-			this.damage = this.Battle(this.player1.battle,this.player2.battle,this.player1.combo);
+			this.damage = GameMaster._Battle(this.player1.battle,this.player2.battle,this.player1.combo);
 		}
 		else if (this.player2.combo){
-			this.damage = -this._Battle(this.player2.battle,this.player1.battle,this.player2.combo);
+			this.damage = -GameMaster._Battle(this.player2.battle,this.player1.battle,this.player2.combo);
 		}
 		else{
-			this.damage = this._Battle(this.player1.battle,this.player2.battle);
+			this.damage = GameMaster._Battle(this.player1.battle,this.player2.battle);
 		}
 
 		function Draw(player,num)
