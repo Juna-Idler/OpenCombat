@@ -167,7 +167,16 @@
 	display:none;
 	flex-wrap:wrap;
 	}
-	
+
+	#waitscreen{
+	position:absolute;
+	width:640px;
+	height:480px;
+	display:none;
+	z-index:255;
+	background:rgba(0,0,0,0);
+	}
+
 	#battleeffect{
 	position:absolute;
 	width:640px;
@@ -220,6 +229,17 @@
 const GMSTATUS = { BattleChoice:1 ,BattleWait:2,DamageChoice:3,DamageWait:4, BattleEffect:5, GameEnd:6 };
 const GSSTATUS = { BattlePhase:1 , DamagePhase:2 , GameEnd:3 };
 
+const player_data =
+{
+	hand : "card object array",
+	decknum : "int",
+	combo : "card object",
+	discard : "card object array",
+	battle : "card object",
+	draw : "card object array",
+	damage : "int"
+};
+
 class GameClient
 {
 	constructor(data)
@@ -228,6 +248,8 @@ class GameClient
 		this.opposite = data.opposite;
 
 		this.status = GameClient.StatusConvert(data.status,this.player.damage);
+		this.jugde = data.jugde;
+		this.battle_effect = false;
 
 		this.message_top = "";
 		this.message_middle = "";
@@ -251,81 +273,45 @@ class GameClient
 		this.player = data.player;
 		this.opposite = data.opposite;
 		this.status = GameClient.StatusConvert(data.status,this.player.damage);
+		this.jugde = data.jugde;
 	}
 	  
-	Choice(index){
-		this.status = this.player.damage > 0 ? GMSTATUS.Choice : GMSTATUS.BattleEffect;
-
-		this.GameServer.Choice(index);
-		const r = JSON.parse(this.GameServer.p1result);
-		this.player = r.player;
-		this.opposite = r.opposite;
-
-		this.message_top = this.message_middle = this.message_bottom = "";
-		if (this.opposite.damage > 0)
-		{
-			this.message_top = "Damage " + this.opposite.damage;
-		}
-		else if (this.player.damage > 0)
-		{
-			this.message_bottom = "Damage " + this.player.damage;
-		}
-		else
-		{
-			this.message_middle = "Draw";
-		}
-		if (r.status == GSSTATUS.GameEnd)
-		{
-			this.status = GMSTATUS.GameEnd;
-			if (r.jugde > 0){
-				this.message_middle = "Game Win";
-			}
-			else if (r.jugde < 0){
-				this.message_middle = "Game Lose";
-			}
-			else{
-				this.message_middle = "Game Draw";
-			}
-
-		}
-	}
-
 	BattleEffect()
 	{
-		if (this.opposite.damage > 0)
+		this.battle_effect = false;
+		if (!this.player.battle)
+			{return;}
+
+		this.player.hand.push(...this.player.draw);
+		this.player.draw.length = 0;
+		this.opposite.hand.push(...this.opposite.draw);
+		this.opposite.draw.length = 0;
+
+
+		if (this.player.combo) {
+			this.player.discard.push(this.player.combo);
+			this.player.combo = null;
+		}
+		if (this.opposite.combo) {
+			this.opposite.discard.push(this.opposite.combo);
+			this.opposite.combo = null;
+		}
+		if (this.player.damage > 0)
 		{
-			this.GameServer.Choice(0);
-			const r = JSON.parse(this.GameServer.p1result);
-			this.player = r.player;
-			this.opposite = r.opposite;
+			this.opposite.combo = this.opposite.battle;
+			this.player.discard.push(this.player.battle);
+		}
+		else if (this.opposite.damage > 0)
+		{
+			this.player.combo = this.player.battle;
+			this.opposite.discard.push(this.opposite.battle);
 		}
 		else
 		{
-			this.player.hand.push(...this.player.draw);
-			this.player.draw.length = 0;
-			this.opposite.hand.push(...this.opposite.draw);
-			this.opposite.draw.length = 0;
-
-
-			if (this.player.combo) {
-				this.player.discard.push(this.player.combo);
-				this.player.combo = null;
-			}
-			if (this.opposite.combo) {
-				this.opposite.discard.push(this.opposite.combo);
-				this.opposite.combo = null;
-			}
 			this.player.discard.push(this.player.battle);
-			if (this.player.damage > 0) {
-				this.opposite.combo = this.opposite.battle;
-			}
-			else{
-				this.opposite.discard.push(this.opposite.battle);
-			}
-			this.player.battle = this.opposite.battle = null;
+			this.opposite.discard.push(this.opposite.battle);
 		}
-
-		this.status = GMSTATUS.Choice;
+		this.player.battle = this.opposite.battle = null;
 	}
 }
   
@@ -353,46 +339,68 @@ window.onload = function() {
 			socket.send(JSON.stringify(msg));
 			matting.style.cursor ="wait";
 			matting.innerText = "Wait another player";
+			matting.onclick = null;
 		}
 	}
 	socket.onmessage = (event)=>{
 		console.log("on message:" + event.data);
+		const data = JSON.parse(event.data);
 		if (Game == null){
 			console.log("Game Start:");
-			const data = JSON.parse(event.data);
 			Game = new GameClient(data);
 			matting.style.display = "none";
 			refresh();
 			return;
 		}
-		const data = JSON.parse(event.data);
 		Game.Update(data);
 
-		if (Game.status == GMSTATUS.BattleEffect)
-			{
-				let elem = document.getElementById('battleeffect');
-				elem.style.display = "block";
-				elem = document.getElementById('battlemessage_top');
-				elem.textContent = Game.message_top;
-				elem = document.getElementById('battlemessage_middle');
-				elem.textContent = Game.message_middle;
-				elem = document.getElementById('battlemessage_bottom');
-				elem.textContent = Game.message_bottom;
-
+		if (Game.status == GMSTATUS.GameEnd)
+		{
+			if (Game.jugde > 0){
+				Game.message_middle = "Game Win";
 			}
-			if (Game.status == GMSTATUS.GameEnd)
-			{
-				let elem = document.getElementById('battleeffect');
-				elem.style.display = "block";
-				elem = document.getElementById('battlemessage_top');
-				elem.textContent = Game.message_top;
-				elem = document.getElementById('battlemessage_middle');
-				elem.textContent = Game.message_middle;
-				elem = document.getElementById('battlemessage_bottom');
-				elem.textContent = Game.message_bottom;
-			}		
-		refresh();
+			else if (Game.jugde < 0){
+				Game.message_middle = "Game Lose";
+			}
+			else{
+				Game.message_middle = "Game Draw";
+			}
+			document.getElementById('battleeffect').style.display = "block";
+			document.getElementById('battlemessage_top').textContent = "";
+			document.getElementById('battlemessage_middle').textContent = Game.message_middle;
+			document.getElementById('battlemessage_bottom').textContent = "";
+			refresh();
+			return;
+		}
+		if (Game.battle_effect)
+		{
+//戦闘後表示状態の時は更新しない
+			return;
+		}
 
+		Game.message_top = Game.message_middle = Game.message_bottom = "";
+		if (Game.player.battle)
+		{
+//戦闘が行われていたら戦闘後表示状態
+			Game.battle_effect = true;
+
+			if (Game.opposite.damage > 0) {
+				Game.waiting_damage = true;
+				Game.message_top = "Damage " + Game.opposite.damage;
+			}
+			else if (Game.player.damage > 0) {
+				Game.waiting_damage = true;
+				Game.message_bottom = "Damage " + Game.player.damage;
+			}
+			else {
+				Game.message_middle = "Draw";
+			}
+			document.getElementById('battleeffect').style.display = "block";
+			document.getElementById('battlemessage_top').textContent = Game.message_top;
+			document.getElementById('battlemessage_middle').textContent = Game.message_middle;
+			document.getElementById('battlemessage_bottom').textContent = Game.message_bottom;
+		}
+		refresh();
 	}
 	
 
@@ -453,6 +461,9 @@ function InitGameElements()
 			{
 				socket.send(JSON.stringify(select_command));
 				Game.status = GMSTATUS.BattleWait;
+				document.getElementById('hand').children[i].style.display ="none";
+				document.getElementById('battle').innerHTML = card_html(Game.player.hand[i],"");
+				document.getElementById('waitscreen').display = "block";
 			}
 			else if (Game.status == GMSTATUS.DamageChoice)
 			{
@@ -537,7 +548,17 @@ function refresh()
 	}
 	else	{
 		document.getElementById('oppositecombo').innerHTML = '<span class="card transparent rotate90" ></span>';
-	}	
+	}
+
+	const wait = document.getElementById('waitscreen');
+	if (Game.status == GMSTATUS.DamageWait || Game.status == GMSTATUS.BattleWait)
+	{
+		wait.style.display = "block";
+	}
+	else
+	{
+		wait.style.display = "none";
+	}
 }
 
 function card_html(card,class_string)
@@ -596,6 +617,7 @@ function create_card_element(card)
 
 <div id="discardlist">
 </div>
+<div id="waitscreen">Wait Opposite Player Choice</div>
 <div id="battleeffect">
 	<div id="battlemessage_top"></div>
 	<div id="battlemessage_middle"></div>

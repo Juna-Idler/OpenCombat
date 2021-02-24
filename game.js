@@ -72,13 +72,13 @@ class GameMaster
 		case STATUS.DamagePhase:
 			if (this.damage > 0)
 			{
-				this.player2.discard.push(this.player2.hand[index]);
-				this.player2.hand.splice(index,1);
+				this.player2.discard.push(this.player2.hand[this.p2decision]);
+				this.player2.hand.splice(this.p2decision,1);
 				this.damage--;
 			}else if (this.damage < 0)
 			{
-				this.player1.discard.push(this.player1.hand[index]);
-				this.player1.hand.splice(index,1);
+				this.player1.discard.push(this.player1.hand[this.p1decision]);
+				this.player1.hand.splice(this.p1decision,1);
 				this.damage++;
 			}
 			if (this.damage == 0)
@@ -191,7 +191,10 @@ class GameMaster
 			this.p1result = this._ResultData(true,end_damage);
 			this.p2result = this._ResultData(false,-end_damage);
 			return;
-		}	
+		}
+
+		if (this.damage == 0) {this.status = STATUS.BattlePhase;}
+		else {this.status = STATUS.DamagePhase;}
 
 		this.p1result = this._ResultData(true);
 		this.p2result = this._ResultData(false);
@@ -205,7 +208,6 @@ class GameMaster
 			this.player2.discard.push(this.player2.combo);
 			this.player2.combo = null;
 		}
-		this.status = STATUS.DamagePhase;
 		if (this.damage > 0) {
 			this.player1.combo = this.player1.battle;
 			this.player2.discard.push(this.player2.battle);
@@ -217,9 +219,6 @@ class GameMaster
 		else {
 			this.player1.discard.push(this.player1.battle);
 			this.player2.discard.push(this.player2.battle);
-	
-			this.status = STATUS.BattlePhase;
-
 		}
 		this.player1.battle = this.player2.battle = null
 	}	

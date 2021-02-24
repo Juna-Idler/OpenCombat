@@ -29,13 +29,12 @@ class GameRoom
              this.game.p2decision = index;
              console.log("Select P2:index=" + index);
         }
-        console.log("Select ??:index=" + index);
         if (this.game.p1decision >= 0 && this.game.p2decision >= 0)
         {
             this.game.Deside();
             this.p1socket.send(this.game.p1result);
             this.p2socket.send(this.game.p2result);
-            console.log("Desice:");
+            console.log("Desice:P1=" + this.game.p1decision + ",P2=" + this.game.p2result);
         }
     }
 }
@@ -63,10 +62,6 @@ wss.on('connection', (ws) => {
         case "Join":
             if (wait_client && wait_client.readyState == WebSocket.OPEN)
             {
-                if (wait_client === ws)
-                {
-                    console.log("Join:Matching???");
-                }
                 let game = new GameRoom(wait_client,ws);
                 Rooms.set(ws,game);
                 Rooms.set(wait_client,game);
@@ -81,7 +76,6 @@ wss.on('connection', (ws) => {
             }
             break;
         case "Select":
-            console.log("Select:index=" + data.index);
             const game = Rooms.get(ws);
             game.Select(ws,data.index);
             break;
