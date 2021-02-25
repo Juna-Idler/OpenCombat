@@ -1,5 +1,16 @@
+'use strict';
+
+const path = require('path');
+const express = require('express');
 const WebSocket = require('ws');
-const wss = new WebSocket.Server({ port: 8080 });
+
+const PORT = process.env.PORT || 8080;
+
+const app = express();
+app.use(express.static(path.join(__dirname, 'public')));
+const server = app.listen(PORT, () => console.log(`Listening on ${PORT}`));
+const wss = new WebSocket.Server({ server });
+
 
 const GameMaster = require("./game");
 
