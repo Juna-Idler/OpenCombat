@@ -322,9 +322,9 @@ const MAX_HAND_NUMBER = 5;
 
 window.onload = function() {
 	InitGameElements();
-//	const Server = "ws://opencombat.herokuapp.com:8080/";
-	const Server = "ws://localhost:8080/";
-	socket = new WebSocket(Server);
+
+	const HOST = location.origin.replace(/^http/, 'ws')
+	socket = new WebSocket(HOST);
 
 	const matting = document.getElementById('matching');
 
